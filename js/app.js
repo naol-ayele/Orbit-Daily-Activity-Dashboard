@@ -131,7 +131,8 @@ function isWithinMinutes(taskTime, nowTime, mins) {
 function checkDeadlines() {
   if (state.selectedDate !== todayISO) return;
   const now = new Date();
-  const nowStr = now.toTimeString().slice(0, 5);
+  const nowStr = now.toTimeString().slice(0, 10);
+  const nowMin = now.getHours() * 60 + now.getMinutes();
   todaysTasks().filter(t => !t.done && t.time).forEach(t => {
     ['overdue', 'upcoming'].forEach(subtype => {
       const key = t.id + '-' + subtype;
@@ -144,6 +145,16 @@ function checkDeadlines() {
         notifiedDeadlines.add(key);
       }
     });
+    if (t.reminder_minutes_before != null && t.reminder_minutes_before > 0 && !t.reminder_fired_at && t.time) {
+      const [th, tm] = t.time.split(':').map(Number);
+      const taskMin = th * 60 + tm;
+      const remindMin = taskMin - t.reminder_minutes_before;
+      if (nowMin >= remindMin && nowMin < taskMin) {
+        showToast(`⏰ "${t.title}" in ${t.reminder_minutes_before} min`, 'warning');
+        updateTask(t.id, { reminder_fired_at: new Date().toISOString() }).catch(() => {});
+        t.reminder_fired_at = new Date().toISOString();
+      }
+    }
   });
 }
 
@@ -527,6 +538,7 @@ function attachTaskEvents(root) {
       document.getElementById('taskPriority').value = task.priority;
       document.getElementById('taskTime').value = task.time || '';
       document.getElementById('taskDate').value = task.date;
+      document.getElementById('taskRemind').value = task.reminder_minutes_before != null ? String(task.reminder_minutes_before) : '';
       document.getElementById('addTaskBtn').textContent = '✎ Update';
       document.getElementById('taskTitle').focus();
       document.getElementById('cancelEditBtn').style.display = '';
@@ -539,6 +551,7 @@ function cancelEdit() {
   document.getElementById('taskTitle').value = '';
   document.getElementById('taskDesc').value = '';
   document.getElementById('taskTime').value = '';
+  document.getElementById('taskRemind').value = '';
   document.getElementById('addTaskBtn').textContent = '+ Add Task';
   document.getElementById('cancelEditBtn').style.display = 'none';
 }
@@ -612,12 +625,14 @@ document.getElementById('addTaskBtn').addEventListener('click', async () => {
   const priority = document.getElementById('taskPriority').value;
   const time = document.getElementById('taskTime').value.trim();
   const date = document.getElementById('taskDate').value || todayISO;
+  const remindVal = document.getElementById('taskRemind').value;
+  const reminder_minutes_before = remindVal ? Number(remindVal) : null;
 
   if (editingTaskId) {
     skipNextRealtime = true;
     const idx = state.tasks.findIndex(t => t.id === editingTaskId);
     const oldDate = idx !== -1 ? state.tasks[idx].date : null;
-    const changes = { title, desc, category, priority, time, date };
+    const changes = { title, desc, category, priority, time, date, reminder_minutes_before, reminder_fired_at: null };
     await updateTask(editingTaskId, changes);
     if (idx !== -1) Object.assign(state.tasks[idx], changes);
     showToast(`✎ "${title}" updated`, 'success');
@@ -635,7 +650,7 @@ document.getElementById('addTaskBtn').addEventListener('click', async () => {
 
   skipNextRealtime = true;
 
-  const created = await addTask({ title, desc, category, priority, time, date });
+  const created = await addTask({ title, desc, category, priority, time, date, reminder_minutes_before });
   state.tasks.push(created);
   if (date && !state.taskDates.has(date)) state.taskDates.add(date);
 
@@ -644,6 +659,7 @@ document.getElementById('addTaskBtn').addEventListener('click', async () => {
   document.getElementById('taskTitle').value = '';
   document.getElementById('taskDesc').value = '';
   document.getElementById('taskTime').value = '';
+  document.getElementById('taskRemind').value = '';
 
   renderTasks();
   renderPriority();

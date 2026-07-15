@@ -212,7 +212,7 @@
   input::placeholder, textarea::placeholder{ color: var(--text-faint); }
   input:focus, textarea:focus, select:focus{ border-color: var(--violet); }
   textarea{ resize:vertical; min-height: 46px; }
-  .task-meta-row{ display:grid; grid-template-columns: repeat(4,1fr); gap: 10px; }
+  .task-meta-row{ display:grid; grid-template-columns: repeat(5,1fr); gap: 10px; }
   .btn-primary{
     background: var(--grad-3); border:none; color:#0b0c10; font-weight:700; font-size:13.5px;
     border-radius: 10px; padding: 10px 20px; white-space:nowrap;
@@ -596,6 +596,12 @@
           </select>
           <input type="text" id="taskTime" placeholder="Time e.g. 14:00">
           <input type="date" id="taskDate">
+          <select id="taskRemind">
+            <option value="">No reminder</option>
+            <option value="5">5 min before</option>
+            <option value="10">10 min before</option>
+            <option value="30">30 min before</option>
+          </select>
         </div>
       </div>
 

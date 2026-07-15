@@ -120,6 +120,8 @@ export async function updateTask(id, partial) {
     if ('priority' in partial) dbPartial.priority = partial.priority;
     if ('time' in partial) dbPartial.time = partial.time;
     if ('date' in partial) dbPartial.task_date = partial.date;
+    if ('reminder_minutes_before' in partial) dbPartial.reminder_minutes_before = partial.reminder_minutes_before;
+    if ('reminder_fired_at' in partial) dbPartial.reminder_fired_at = partial.reminder_fired_at;
     const { data, error } = await supabase
       .from('tasks')
       .update(dbPartial)
