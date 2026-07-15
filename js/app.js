@@ -35,7 +35,8 @@ let state = {
   plans: [],
   history: [],
   taskDates: new Set(),
-  heatmapData: []
+  heatmapData: [],
+  reportView: 'day'
 };
 
 let confettiFiredToday = false;
@@ -617,6 +618,16 @@ document.getElementById('addTaskBtn').addEventListener('click', async () => {
   renderCalendar();
 });
 
+/* ---------- report toggle ---------- */
+document.querySelectorAll('.report-chip').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.report-chip').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.reportView = btn.dataset.view;
+    renderReport();
+  });
+});
+
 /* ============ PRIORITY LIST ============ */
 function renderPriority() {
   const list = document.getElementById('priorityList');
@@ -749,27 +760,103 @@ function renderPlans() {
 
 /* ============ REPORT ============ */
 function renderReport() {
-  const today = todaysTasks();
-  const done = today.filter(t => t.done).length;
-  const total = today.length;
-  const pct = total ? Math.round((done / total) * 100) : 0;
-  const highOpen = today.filter(t => t.priority === 'high' && !t.done).length;
+  const barsTitle = document.getElementById('barsTitle');
+  const bars = document.getElementById('barsRow');
+  const stats = document.getElementById('reportStats');
+  document.querySelectorAll('.report-chip').forEach(b => b.classList.toggle('active', b.dataset.view === state.reportView));
 
-  document.getElementById('reportStats').innerHTML = `
-    <div class="stat-card"><div class="stat-num mono">${done}/${total}</div><div class="stat-label">Tasks Completed</div></div>
-    <div class="stat-card"><div class="stat-num mono">${pct}%</div><div class="stat-label">Completion Rate</div></div>
-    <div class="stat-card"><div class="stat-num mono">${highOpen}</div><div class="stat-label">High Priority Open</div></div>
+  if (state.reportView === 'day') {
+    const today = todaysTasks();
+    const done = today.filter(t => t.done).length;
+    const total = today.length;
+    const pct = total ? Math.round((done / total) * 100) : 0;
+    const highOpen = today.filter(t => t.priority === 'high' && !t.done).length;
+
+    stats.innerHTML = `
+      <div class="stat-card"><div class="stat-num mono">${done}/${total}</div><div class="stat-label">Tasks Completed</div></div>
+      <div class="stat-card"><div class="stat-num mono">${pct}%</div><div class="stat-label">Completion Rate</div></div>
+      <div class="stat-card"><div class="stat-num mono">${highOpen}</div><div class="stat-label">High Priority Open</div></div>
+      <div class="stat-card"><div class="stat-num mono">${state.streak}</div><div class="stat-label">Day Streak</div></div>
+    `;
+
+    if (barsTitle) barsTitle.textContent = 'Last 7 Days Completion';
+    const hist = [...state.history, { day: 'Today', pct }];
+    bars.innerHTML = hist.map(h => `
+      <div class="bar-col ${h.day === 'Today' ? 'today' : ''}">
+        <div class="bar-fill" style="height:${Math.max(4, h.pct)}%"></div>
+        <div class="bar-day">${h.day}</div>
+      </div>
+    `).join('');
+    return;
+  }
+
+  const rawData = state.heatmapData || [];
+  const now = new Date();
+  let start, end, labelFn;
+
+  if (state.reportView === 'week') {
+    const dayOfWeek = now.getDay();
+    start = new Date(now); start.setDate(now.getDate() - dayOfWeek);
+    end = new Date(start); end.setDate(start.getDate() + 6);
+    if (barsTitle) barsTitle.textContent = 'This Week';
+    labelFn = d => d.toLocaleDateString('en-US', { weekday: 'short' });
+  } else {
+    start = new Date(now.getFullYear(), now.getMonth(), 1);
+    end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    if (barsTitle) barsTitle.textContent = 'This Month';
+    labelFn = d => String(d.getDate());
+  }
+
+  const startStr = start.toISOString().slice(0, 10);
+  const endStr = end.toISOString().slice(0, 10);
+  const entries = rawData.filter(h => h.entry_date >= startStr && h.entry_date <= endStr);
+
+  const avgPct = entries.length ? Math.round(entries.reduce((s, e) => s + e.completion_pct, 0) / entries.length) : 0;
+  const activeDays = entries.filter(e => e.completion_pct > 0).length;
+  const totalDays = Math.round((end - start) / 86400000) + 1;
+  let bestDay = { entry_date: '', completion_pct: 0 };
+  for (const e of entries) { if (e.completion_pct > bestDay.completion_pct) bestDay = e; }
+
+  stats.innerHTML = `
+    <div class="stat-card"><div class="stat-num mono">${avgPct}%</div><div class="stat-label">Avg Completion</div></div>
+    <div class="stat-card"><div class="stat-num mono">${activeDays}/${totalDays}</div><div class="stat-label">Active Days</div></div>
+    <div class="stat-card"><div class="stat-num mono">${bestDay.completion_pct}%</div><div class="stat-label">Best Day${bestDay.entry_date ? ` (${bestDay.entry_date})` : ''}</div></div>
     <div class="stat-card"><div class="stat-num mono">${state.streak}</div><div class="stat-label">Day Streak</div></div>
   `;
 
-  const bars = document.getElementById('barsRow');
-  const hist = [...state.history, { day: 'Today', pct }];
-  bars.innerHTML = hist.map(h => `
-    <div class="bar-col ${h.day === 'Today' ? 'today' : ''}">
-      <div class="bar-fill" style="height:${Math.max(4, h.pct)}%"></div>
-      <div class="bar-day">${h.day}</div>
-    </div>
-  `).join('');
+  if (state.reportView === 'month') {
+    const weekBuckets = [];
+    let weekStart = new Date(start);
+    while (weekStart <= end) {
+      const weekEnd = new Date(weekStart); weekEnd.setDate(weekEnd.getDate() + 6);
+      const weekEntries = rawData.filter(h => h.entry_date >= weekStart.toISOString().slice(0, 10) && h.entry_date <= weekEnd.toISOString().slice(0, 10) && h.entry_date <= endStr);
+      const avg = weekEntries.length ? Math.round(weekEntries.reduce((s, e) => s + e.completion_pct, 0) / weekEntries.length) : 0;
+      weekBuckets.push({ label: `${weekStart.getDate()}/${weekStart.getMonth() + 1}`, pct: avg });
+      weekStart.setDate(weekStart.getDate() + 7);
+    }
+    bars.innerHTML = weekBuckets.map(w => `
+      <div class="bar-col">
+        <div class="bar-fill" style="height:${Math.max(4, w.pct)}%"></div>
+        <div class="bar-day">${w.label}</div>
+      </div>
+    `).join('');
+  } else {
+    const dayMap = {};
+    for (const e of entries) dayMap[e.entry_date] = e.completion_pct;
+    let cursor = new Date(start);
+    let dayHtml = '';
+    while (cursor <= end) {
+      const iso = cursor.toISOString().slice(0, 10);
+      const pct = dayMap[iso] || 0;
+      const isToday = iso === todayISO;
+      dayHtml += `<div class="bar-col${isToday ? ' today' : ''}">
+        <div class="bar-fill" style="height:${Math.max(4, pct)}%"></div>
+        <div class="bar-day">${labelFn(cursor)}</div>
+      </div>`;
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    bars.innerHTML = dayHtml;
+  }
 }
 
 /* ============ STREAK + CONFETTI ============ */
