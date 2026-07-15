@@ -354,7 +354,51 @@ async function handleTaskChange() {
 }
 
 /* ============ INIT ============ */
+/* ---------- PWA / offline ---------- */
+function updateOfflineBanner() {
+  const banner = document.getElementById('offlineBanner');
+  if (!banner) return;
+  banner.classList.toggle('app-hidden', navigator.onLine);
+}
+
+async function flushOfflineQueue() {
+  const queue = JSON.parse(localStorage.getItem('offlineQueue') || '[]');
+  if (!queue.length) return;
+  localStorage.removeItem('offlineQueue');
+  for (const op of queue) {
+    try {
+      if (op.type === 'addTask') await addTask(op.payload);
+      else if (op.type === 'toggleTask') await toggleTask(op.payload);
+      else if (op.type === 'deleteTask') await deleteTask(op.payload);
+      else if (op.type === 'updateTask') await updateTask(op.payload.id, op.payload.changes);
+      else if (op.type === 'addSubtask') await addSubtask(op.payload.taskId, op.payload.title);
+      else if (op.type === 'toggleSubtask') await toggleSubtask(op.payload);
+      else if (op.type === 'deleteSubtask') await deleteSubtask(op.payload);
+      else if (op.type === 'updatePlanProgress') await updatePlanProgress(op.payload.id, op.payload.progress);
+      else if (op.type === 'upsertTodayHistory') await upsertTodayHistory(op.payload);
+      else if (op.type === 'updateProfile') await updateProfile(op.payload);
+    } catch (_) {}
+  }
+  showToast('🔄 Offline changes synced', 'success');
+}
+
+function queueWrite(type, payload) {
+  try {
+    const queue = JSON.parse(localStorage.getItem('offlineQueue') || '[]');
+    queue.push({ type, payload });
+    localStorage.setItem('offlineQueue', JSON.stringify(queue));
+  } catch (_) {}
+}
+
 export async function init() {
+  if ('serviceWorker' in navigator) {
+    try {
+      await navigator.serviceWorker.register('/sw.js');
+    } catch (_) {}
+  }
+  window.addEventListener('online', () => { updateOfflineBanner(); flushOfflineQueue(); });
+  window.addEventListener('offline', updateOfflineBanner);
+  updateOfflineBanner();
   const { data: { session } } = await supabase.auth.getSession();
   if (session) {
     showDashboard();

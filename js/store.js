@@ -6,6 +6,20 @@ async function getUserId() {
   return user.id;
 }
 
+/* ---------- offline queue ---------- */
+function offlineQueueWrite(type, payload) {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    const queue = JSON.parse(localStorage.getItem('offlineQueue') || '[]');
+    queue.push({ type, payload });
+    localStorage.setItem('offlineQueue', JSON.stringify(queue));
+  } catch (_) {}
+}
+
+function isOnline() {
+  return typeof navigator === 'undefined' || navigator.onLine;
+}
+
 /* ---------- helpers ---------- */
 
 function toDbTask(task) {
@@ -57,6 +71,7 @@ export async function getAllTasks() {
 
 /** Insert a new task. Returns the created task with its server-generated id. */
 export async function addTask(task) {
+  if (!isOnline()) { offlineQueueWrite('addTask', task); return task; }
   try {
     const userId = await getUserId();
     const dbTask = toDbTask(task);
@@ -75,6 +90,7 @@ export async function addTask(task) {
 
 /** Flip a task's done state. */
 export async function toggleTask(id) {
+  if (!isOnline()) { offlineQueueWrite('toggleTask', id); return; }
   try {
     await getUserId();
     const { data: task, error: fetchError } = await supabase
@@ -96,6 +112,7 @@ export async function toggleTask(id) {
 
 /** Delete a task by id. */
 export async function deleteTask(id) {
+  if (!isOnline()) { offlineQueueWrite('deleteTask', id); return; }
   try {
     await getUserId();
     const { error } = await supabase
@@ -129,6 +146,7 @@ export async function getAllTemplates() {
 
 /** Update fields on an existing task (title, description, category, priority, time, date). */
 export async function updateTask(id, partial) {
+  if (!isOnline()) { offlineQueueWrite('updateTask', { id, changes: partial }); return partial; }
   try {
     await getUserId();
     const dbPartial = {};
@@ -175,6 +193,7 @@ export async function getPlans() {
 
 /** Update a plan's progress percentage. */
 export async function updatePlanProgress(id, progress) {
+  if (!isOnline()) { offlineQueueWrite('updatePlanProgress', { id, progress }); return; }
   try {
     await getUserId();
     const { error } = await supabase
@@ -228,6 +247,7 @@ export async function getHistory(days = 7) {
 
 /** Upsert today's completion percentage into daily_history. */
 export async function upsertTodayHistory(pct) {
+  if (!isOnline()) { offlineQueueWrite('upsertTodayHistory', pct); return; }
   try {
     const userId = await getUserId();
     const today = new Date().toISOString().slice(0, 10);
@@ -265,6 +285,7 @@ export async function getProfile() {
 
 /** Partial update to the current user's profile row. */
 export async function updateProfile(partial) {
+  if (!isOnline()) { offlineQueueWrite('updateProfile', partial); return; }
   try {
     const userId = await getUserId();
     const { error } = await supabase
@@ -370,6 +391,7 @@ export async function getSubtasks(taskId) {
 
 /** Add a subtask to a task. */
 export async function addSubtask(taskId, title) {
+  if (!isOnline()) { offlineQueueWrite('addSubtask', { taskId, title }); return { id: 'offline-' + Date.now(), task_id: taskId, title, done: false }; }
   try {
     await getUserId();
     const { data, error } = await supabase
@@ -387,6 +409,7 @@ export async function addSubtask(taskId, title) {
 
 /** Toggle a subtask's done state. */
 export async function toggleSubtask(id) {
+  if (!isOnline()) { offlineQueueWrite('toggleSubtask', id); return; }
   try {
     await getUserId();
     const { data: sub, error: fetchError } = await supabase
@@ -408,6 +431,7 @@ export async function toggleSubtask(id) {
 
 /** Delete a subtask. */
 export async function deleteSubtask(id) {
+  if (!isOnline()) { offlineQueueWrite('deleteSubtask', id); return; }
   try {
     await getUserId();
     const { error } = await supabase

@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Orbit — Daily Activity Dashboard</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1e1f28">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -388,6 +390,12 @@
     text-align:center; font-weight:500;
   }
   .logout-btn:hover{ background: var(--panel-2); border-color: var(--line-2); color: var(--coral); }
+  .offline-banner{
+    position:fixed; bottom:0; left:0; right:0; z-index:1900;
+    background:rgba(255,181,69,0.12); border-top:1px solid rgba(255,181,69,0.3);
+    color:var(--amber); text-align:center; font-size:12px; padding:8px 16px;
+    font-family:'IBM Plex Sans',sans-serif; backdrop-filter:blur(8px);
+  }
   #toastContainer{
     position:fixed; top:18px; right:24px; z-index:2000;
     display:flex; flex-direction:column; gap:8px;
@@ -671,6 +679,7 @@
 
 
 <div id="toastContainer"></div>
+<div id="offlineBanner" class="offline-banner app-hidden">📶 You're offline — changes will sync when reconnected</div>
 
 <div id="notifPanel" class="notif-panel app-hidden">
   <div class="notif-panel-head">
