@@ -105,6 +105,14 @@
     display:flex; align-items:center; gap:8px;
   }
   .today-pill b{ color: var(--text); }
+  .notif-btn{
+    background: var(--panel); border:1px solid var(--line); border-radius:50%;
+    width:34px; height:34px; font-size:15px; display:flex; align-items:center; justify-content:center;
+    transition: all .15s ease;
+  }
+  .notif-btn:hover{ border-color: var(--line-2); background: var(--panel-2); }
+  .notif-btn.granted{ border-color: rgba(79,227,193,0.35); }
+  .notif-btn.denied{ opacity:.45; }
 
   section{ margin-bottom: 34px; scroll-margin-top: 20px; }
   .section-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom: 14px; }
@@ -384,7 +392,10 @@
         <h2 id="greeting">Good day 👋</h2>
         <div class="sub">Here's everything on your plate today.</div>
       </div>
-      <div class="today-pill">📅 <b id="todayLabel">—</b></div>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <button id="notifBtn" class="notif-btn" title="Enable desktop notifications">🔔</button>
+        <div class="today-pill">📅 <b id="todayLabel">—</b></div>
+      </div>
     </div>
 
     <!-- GOALS -->

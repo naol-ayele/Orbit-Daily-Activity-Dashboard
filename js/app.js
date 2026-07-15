@@ -43,6 +43,34 @@ let lastRealtimeUpdate = 0;
 let notifiedDeadlines = new Set();
 let deadlineInterval = null;
 
+/* ============ NOTIFICATIONS ============ */
+function updateNotifBtn(state) {
+  const btn = document.getElementById('notifBtn');
+  if (!btn) return;
+  btn.className = 'notif-btn';
+  if (state === 'granted') { btn.classList.add('granted'); btn.textContent = '🔔'; }
+  else if (state === 'denied') { btn.classList.add('denied'); btn.textContent = '🔕'; }
+  else { btn.textContent = '🔔'; }
+}
+
+async function requestNotifPermission() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'granted') {
+    new Notification('Orbit', { body: 'Notifications are already enabled.' });
+    return;
+  }
+  const result = await Notification.requestPermission();
+  updateNotifBtn(result);
+  if (result === 'granted') {
+    new Notification('Orbit', { body: 'Desktop notifications enabled! You\'ll get deadline alerts here.' });
+  }
+}
+
+function fireDesktopNotif(message) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  new Notification('Orbit', { body: message, icon: '/favicon.ico' });
+}
+
 /* ============ TOAST ============ */
 function showToast(message, type, duration = 4000) {
   const container = document.getElementById('toastContainer');
@@ -51,6 +79,7 @@ function showToast(message, type, duration = 4000) {
   el.className = 'toast ' + type;
   el.textContent = message;
   container.appendChild(el);
+  if (type === 'error' || type === 'warning') fireDesktopNotif(message);
   setTimeout(() => { if (el.parentNode) el.remove(); }, duration);
 }
 
@@ -95,6 +124,8 @@ async function showDashboard() {
     document.getElementById('loadingOverlay').style.display = 'none';
   }
   renderAll();
+
+  if ('Notification' in window) updateNotifBtn(Notification.permission);
 
   const { data: { user } } = await supabase.auth.getUser();
   if (user) {
@@ -251,6 +282,8 @@ supabase.auth.onAuthStateChange((event, session) => {
     showLogin();
   }
 });
+
+document.getElementById('notifBtn').addEventListener('click', requestNotifPermission);
 
 document.getElementById('logoutBtn').addEventListener('click', async () => {
   await supabase.auth.signOut();
