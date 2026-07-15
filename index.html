@@ -299,6 +299,22 @@
     text-align:center; font-weight:500;
   }
   .logout-btn:hover{ background: var(--panel-2); border-color: var(--line-2); color: var(--coral); }
+  #toastContainer{
+    position:fixed; top:18px; right:24px; z-index:2000;
+    display:flex; flex-direction:column; gap:8px;
+    pointer-events:none;
+  }
+  .toast{
+    padding:10px 16px; border-radius:10px; font-size:12.5px;
+    font-family:'IBM Plex Sans',sans-serif; box-shadow:0 8px 24px rgba(0,0,0,0.4);
+    animation: slideIn 0.25s ease, fadeOut 0.3s ease 3.7s forwards;
+    pointer-events:auto; max-width:340px;
+  }
+  .toast.success{ background:rgba(79,227,193,0.15); color:var(--mint); border:1px solid rgba(79,227,193,0.35); }
+  .toast.warning{ background:rgba(255,181,69,0.15); color:var(--amber); border:1px solid rgba(255,181,69,0.35); }
+  .toast.error{ background:rgba(255,107,107,0.15); color:var(--coral); border:1px solid rgba(255,107,107,0.35); }
+  @keyframes slideIn{ from{opacity:0;transform:translateX(20px);} to{opacity:1;transform:translateX(0);} }
+  @keyframes fadeOut{ to{opacity:0;transform:translateY(-6px);} }
 </style>
 </head>
 
@@ -478,6 +494,8 @@
   </main>
 </div>
 
+
+<div id="toastContainer"></div>
 
 <script type="module">
   import { init } from './js/app.js';

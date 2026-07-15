@@ -40,6 +40,47 @@ let state = {
 let confettiFiredToday = false;
 let tasksSubscription = null;
 let lastRealtimeUpdate = 0;
+let notifiedDeadlines = new Set();
+let deadlineInterval = null;
+
+/* ============ TOAST ============ */
+function showToast(message, type, duration = 4000) {
+  const container = document.getElementById('toastContainer');
+  if (!container) return;
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = message;
+  container.appendChild(el);
+  setTimeout(() => { if (el.parentNode) el.remove(); }, duration);
+}
+
+/* ============ DEADLINE CHECK ============ */
+function isWithinMinutes(taskTime, nowTime, mins) {
+  const [th, tm] = taskTime.split(':').map(Number);
+  const [nh, nm] = nowTime.split(':').map(Number);
+  const taskMin = th * 60 + tm;
+  const nowMin = nh * 60 + nm;
+  return taskMin > nowMin && taskMin - nowMin <= mins;
+}
+
+function checkDeadlines() {
+  if (state.selectedDate !== todayISO) return;
+  const now = new Date();
+  const nowStr = now.toTimeString().slice(0, 5);
+  todaysTasks().filter(t => !t.done && t.time).forEach(t => {
+    ['overdue', 'upcoming'].forEach(subtype => {
+      const key = t.id + '-' + subtype;
+      if (notifiedDeadlines.has(key)) return;
+      if (subtype === 'overdue' && t.time <= nowStr) {
+        showToast(`🔴 Overdue: "${t.title}" (was ${t.time})`, 'error');
+        notifiedDeadlines.add(key);
+      } else if (subtype === 'upcoming' && isWithinMinutes(t.time, nowStr, 30)) {
+        showToast(`🟡 Soon: "${t.title}" at ${t.time}`, 'warning');
+        notifiedDeadlines.add(key);
+      }
+    });
+  });
+}
 
 /* ============ AUTH ============ */
 let authMode = 'login';
@@ -60,6 +101,9 @@ async function showDashboard() {
     if (tasksSubscription) supabase.removeChannel(tasksSubscription);
     tasksSubscription = subscribeToTasks(user.id, handleTaskChange);
   }
+  checkDeadlines();
+  if (deadlineInterval) clearInterval(deadlineInterval);
+  deadlineInterval = setInterval(checkDeadlines, 60000);
 }
 
 function showLogin() {
@@ -203,6 +247,7 @@ supabase.auth.onAuthStateChange((event, session) => {
     showDashboard();
   } else if (event === 'SIGNED_OUT') {
     if (tasksSubscription) { supabase.removeChannel(tasksSubscription); tasksSubscription = null; }
+    if (deadlineInterval) { clearInterval(deadlineInterval); deadlineInterval = null; }
     showLogin();
   }
 });
@@ -287,8 +332,13 @@ function attachTaskEvents(root) {
   root.querySelectorAll('[data-check]').forEach(el => {
     el.addEventListener('click', async () => {
       const id = el.dataset.check;
+      const wasDone = state.tasks.find(t => t.id === id)?.done;
       await toggleTask(id);
       await loadTasks();
+      const task = state.tasks.find(t => t.id === id);
+      if (task) {
+        showToast(task.done ? `✓ "${task.title}" done!` : `↩ "${task.title}" reopened`, task.done ? 'success' : 'warning');
+      }
       renderTasks();
       renderPriority();
       renderReport();
@@ -297,7 +347,9 @@ function attachTaskEvents(root) {
   root.querySelectorAll('[data-del]').forEach(el => {
     el.addEventListener('click', async () => {
       const id = el.dataset.del;
+      const task = state.tasks.find(t => t.id === id);
       await deleteTask(id);
+      showToast(`🗑 "${task ? task.title : id}" deleted`, 'warning');
       await loadTasks();
       await loadTaskDatesForMonth();
       renderTasks();
@@ -324,6 +376,8 @@ document.getElementById('addTaskBtn').addEventListener('click', async () => {
   const date = document.getElementById('taskDate').value || todayISO;
 
   await addTask({ title, desc, category, priority, time, date });
+
+  showToast(`✓ "${title}" added`, 'success');
 
   document.getElementById('taskTitle').value = '';
   document.getElementById('taskDesc').value = '';
