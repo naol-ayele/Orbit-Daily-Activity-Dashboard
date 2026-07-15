@@ -447,7 +447,8 @@ function attachTaskEvents(root) {
       const id = el.dataset.del;
       const task = state.tasks.find(t => t.id === id);
       if (!task) return;
-      if (!confirm(`Delete "${task.title}"? This cannot be undone.`)) return;
+      const confirmed = await showConfirmDialog(`Delete "${task.title}"? This cannot be undone.`);
+      if (!confirmed) return;
       if (!state.tasks.find(t => t.id === id)) return;
       skipNextRealtime = true;
       const idx = state.tasks.indexOf(task);
@@ -491,6 +492,36 @@ function escapeHTML(str) {
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
+}
+
+/* ---------- confirm dialog ---------- */
+function showConfirmDialog(message) {
+  return new Promise(resolve => {
+    const overlay = document.getElementById('confirmDialog');
+    const msgEl = document.getElementById('confirmMessage');
+    const okBtn = document.getElementById('confirmOk');
+    const cancelBtn = document.getElementById('confirmCancel');
+    if (!overlay || !msgEl || !okBtn || !cancelBtn) { resolve(true); return; }
+    msgEl.textContent = message;
+    overlay.classList.add('active');
+    okBtn.focus();
+    function cleanup(result) {
+      overlay.classList.remove('active');
+      okBtn.removeEventListener('click', onOk);
+      cancelBtn.removeEventListener('click', onCancel);
+      overlay.removeEventListener('click', onBackdrop);
+      document.removeEventListener('keydown', onKey);
+      resolve(result);
+    }
+    function onOk() { cleanup(true); }
+    function onCancel() { cleanup(false); }
+    function onBackdrop(e) { if (e.target === overlay) cleanup(false); }
+    function onKey(e) { if (e.key === 'Escape') cleanup(false); }
+    okBtn.addEventListener('click', onOk);
+    cancelBtn.addEventListener('click', onCancel);
+    overlay.addEventListener('click', onBackdrop);
+    document.addEventListener('keydown', onKey);
+  });
 }
 
 document.getElementById('cancelEditBtn')?.addEventListener('click', cancelEdit);
