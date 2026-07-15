@@ -349,6 +349,78 @@ export async function updateStreakIfAllDone(tasks, date) {
   }
 }
 
+/* ---------- subtasks ---------- */
+
+/** Get all subtasks for a given task. */
+export async function getSubtasks(taskId) {
+  try {
+    await getUserId();
+    const { data, error } = await supabase
+      .from('subtasks')
+      .select('*')
+      .eq('task_id', taskId)
+      .order('sort_order');
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error('store.getSubtasks:', err);
+    return [];
+  }
+}
+
+/** Add a subtask to a task. */
+export async function addSubtask(taskId, title) {
+  try {
+    await getUserId();
+    const { data, error } = await supabase
+      .from('subtasks')
+      .insert({ task_id: taskId, title, done: false })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    console.error('store.addSubtask:', err);
+    throw err;
+  }
+}
+
+/** Toggle a subtask's done state. */
+export async function toggleSubtask(id) {
+  try {
+    await getUserId();
+    const { data: sub, error: fetchError } = await supabase
+      .from('subtasks')
+      .select('done')
+      .eq('id', id)
+      .single();
+    if (fetchError) throw fetchError;
+    const { error: updateError } = await supabase
+      .from('subtasks')
+      .update({ done: !sub.done })
+      .eq('id', id);
+    if (updateError) throw updateError;
+  } catch (err) {
+    console.error('store.toggleSubtask:', err);
+    throw err;
+  }
+}
+
+/** Delete a subtask. */
+export async function deleteSubtask(id) {
+  try {
+    await getUserId();
+    const { error } = await supabase
+      .from('subtasks')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+  } catch (err) {
+    console.error('store.deleteSubtask:', err);
+    throw err;
+  }
+}
+
 /* ---------- realtime ---------- */
 
 /**

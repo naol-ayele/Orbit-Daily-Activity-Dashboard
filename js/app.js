@@ -6,6 +6,7 @@
 import { supabase } from './supabase-client.js';
 import {
   getTasks, getAllTasks, addTask, toggleTask, deleteTask, updateTask, getAllTemplates,
+  getSubtasks, addSubtask, toggleSubtask, deleteSubtask,
   getPlans, updatePlanProgress,
   getHistory, upsertTodayHistory,
   getProfile,
@@ -38,7 +39,9 @@ let state = {
   heatmapData: [],
   reportView: 'day',
   searchQuery: '',
-  showAllDates: false
+  showAllDates: false,
+  subtasksCache: {},
+  expandedTasks: new Set()
 };
 
 let confettiFiredToday = false;
@@ -506,8 +509,11 @@ function renderTasks() {
 
 function taskItemHTML(t) {
   const catColor = CATEGORY_COLORS[t.category] || '#888';
+  const subs = state.subtasksCache[t.id] || [];
+  const doneCount = subs.filter(s => s.done).length;
+  const expanded = state.expandedTasks.has(t.id);
   return `
-  <div class="task-item ${t.done ? 'done' : ''}" data-id="${t.id}">
+  <div class="task-item ${t.done ? 'done' : ''} ${expanded ? 'expanded' : ''}" data-id="${t.id}">
     <div class="checkbox" data-check="${t.id}">${t.done ? '✓' : ''}</div>
     <div class="task-body">
       <div class="task-top">
@@ -522,6 +528,24 @@ function taskItemHTML(t) {
         <span class="tagpill prio-${t.priority}">${t.priority}</span>
         <span class="tagpill cat-pill" style="border-color:${catColor}55;">${t.category}</span>
         ${t.time ? `<span class="tagpill cat-pill">🕐 ${t.time}</span>` : ''}
+      </div>
+      <div class="subtask-section">
+        <div class="subtask-summary" data-expand="${t.id}">
+          📋 ${doneCount}/${subs.length} subtasks ${expanded ? '▾' : '▸'}
+        </div>
+        ${expanded ? `
+        <div class="subtask-list">
+          ${subs.map(s => `
+            <div class="subtask-item ${s.done ? 'done' : ''}">
+              <span class="subtask-check" data-stoggle="${s.id}">${s.done ? '✓' : ''}</span>
+              <span class="subtask-title">${escapeHTML(s.title)}</span>
+              <button class="subtask-del" data-sdel="${s.id}">✕</button>
+            </div>
+          `).join('')}
+          <div class="subtask-add">
+            <input type="text" placeholder="Add subtask..." data-sadd="${t.id}">
+          </div>
+        </div>` : ''}
       </div>
     </div>
   </div>`;
@@ -577,6 +601,61 @@ function attachTaskEvents(root) {
       document.getElementById('addTaskBtn').textContent = '✎ Update';
       document.getElementById('taskTitle').focus();
       document.getElementById('cancelEditBtn').style.display = '';
+    });
+  });
+  root.querySelectorAll('[data-expand]').forEach(el => {
+    el.addEventListener('click', async () => {
+      const taskId = el.dataset.expand;
+      if (state.expandedTasks.has(taskId)) {
+        state.expandedTasks.delete(taskId);
+      } else {
+        state.expandedTasks.add(taskId);
+        if (!state.subtasksCache[taskId]) {
+          state.subtasksCache[taskId] = await getSubtasks(taskId);
+        }
+      }
+      renderTasks();
+      renderPriority();
+    });
+  });
+  root.querySelectorAll('[data-stoggle]').forEach(el => {
+    el.addEventListener('click', async () => {
+      const id = el.dataset.stoggle;
+      const taskId = el.closest('.task-item')?.dataset.id;
+      if (!taskId) return;
+      const subs = state.subtasksCache[taskId];
+      const sub = subs?.find(s => s.id === id);
+      if (!sub) return;
+      sub.done = !sub.done;
+      await toggleSubtask(id);
+      renderTasks();
+      renderPriority();
+    });
+  });
+  root.querySelectorAll('[data-sdel]').forEach(el => {
+    el.addEventListener('click', async () => {
+      const id = el.dataset.sdel;
+      const taskId = el.closest('.task-item')?.dataset.id;
+      if (!taskId || !(await showConfirmDialog('Delete this subtask?'))) return;
+      const subs = state.subtasksCache[taskId];
+      if (subs) { const idx = subs.findIndex(s => s.id === id); if (idx !== -1) subs.splice(idx, 1); }
+      await deleteSubtask(id);
+      renderTasks();
+      renderPriority();
+    });
+  });
+  root.querySelectorAll('[data-sadd]').forEach(el => {
+    el.addEventListener('keydown', async e => {
+      if (e.key !== 'Enter') return;
+      const title = e.target.value.trim();
+      if (!title) return;
+      const taskId = el.dataset.sadd;
+      const created = await addSubtask(taskId, title);
+      if (!state.subtasksCache[taskId]) state.subtasksCache[taskId] = [];
+      state.subtasksCache[taskId].push(created);
+      e.target.value = '';
+      renderTasks();
+      renderPriority();
     });
   });
 }
