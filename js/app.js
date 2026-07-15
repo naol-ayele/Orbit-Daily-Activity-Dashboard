@@ -134,26 +134,33 @@ function isWithinMinutes(taskTime, nowTime, mins) {
 function checkDeadlines() {
   if (state.selectedDate !== todayISO) return;
   const now = new Date();
-  const nowStr = now.toTimeString().slice(0, 10);
+  const nowStr = now.toTimeString().slice(0, 5);
   const nowMin = now.getHours() * 60 + now.getMinutes();
   todaysTasks().filter(t => !t.done && t.time).forEach(t => {
-    ['overdue', 'upcoming'].forEach(subtype => {
-      const key = t.id + '-' + subtype;
-      if (notifiedDeadlines.has(key)) return;
-      if (subtype === 'overdue' && t.time <= nowStr) {
-        showToast(`🔴 Overdue: "${t.title}" (was ${t.time})`, 'error');
-        notifiedDeadlines.add(key);
-      } else if (subtype === 'upcoming' && isWithinMinutes(t.time, nowStr, 30)) {
-        showToast(`🟡 Soon: "${t.title}" at ${t.time}`, 'warning');
-        notifiedDeadlines.add(key);
-      }
-    });
+    const keyOv = t.id + '-overdue';
+    const keyUp = t.id + '-upcoming30';
+    if (!notifiedDeadlines.has(keyOv) && t.time <= nowStr) {
+      showToast(`🔴 Overdue: "${t.title}" (was ${t.time})`, 'error');
+      notifiedDeadlines.add(keyOv);
+    } else if (!notifiedDeadlines.has(keyUp) && isWithinMinutes(t.time, nowStr, 30)) {
+      showToast(`🟡 Soon: "${t.title}" at ${t.time}`, 'warning');
+      notifiedDeadlines.add(keyUp);
+    }
+
     if (t.reminder_minutes_before != null && t.reminder_minutes_before > 0 && !t.reminder_fired_at && t.time) {
       const [th, tm] = t.time.split(':').map(Number);
       const taskMin = th * 60 + tm;
       const remindMin = taskMin - t.reminder_minutes_before;
-      if (nowMin >= remindMin && nowMin < taskMin) {
-        showToast(`⏰ "${t.title}" in ${t.reminder_minutes_before} min`, 'warning');
+      if (nowMin >= remindMin) {
+        const isLate = nowMin >= taskMin;
+        const diff = Math.abs(taskMin - nowMin);
+        const diffStr = diff >= 60
+          ? `${Math.floor(diff / 60)}h${diff % 60 ? ' ' + diff % 60 + 'm' : ''}`
+          : diff + 'm';
+        const msg = isLate
+          ? `🔴 "${t.title}" — was due at ${t.time} (${diffStr} ago)`
+          : `⏰ "${t.title}" — ${diffStr} left (due ${t.time})`;
+        showToast(msg, isLate ? 'error' : 'warning');
         updateTask(t.id, { reminder_fired_at: new Date().toISOString() }).catch(() => {});
         t.reminder_fired_at = new Date().toISOString();
       }
