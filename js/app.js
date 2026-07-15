@@ -42,6 +42,8 @@ let tasksSubscription = null;
 let lastRealtimeUpdate = 0;
 let notifiedDeadlines = new Set();
 let deadlineInterval = null;
+let notificationHistory = [];
+let notifIdCounter = 0;
 
 /* ============ NOTIFICATIONS ============ */
 function updateNotifBtn(state) {
@@ -71,6 +73,29 @@ function fireDesktopNotif(message) {
   new Notification('Orbit', { body: message, icon: '/favicon.ico' });
 }
 
+function renderNotifPanel() {
+  const body = document.getElementById('notifPanelBody');
+  if (!body) return;
+  if (notificationHistory.length === 0) {
+    body.innerHTML = '<div class="notif-empty">No notifications yet.</div>';
+    return;
+  }
+  body.innerHTML = notificationHistory.slice().reverse().map(n =>
+    `<div class="notif-item ${n.type}">
+      ${n.message}
+      <div class="notif-time">${n.time.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}</div>
+    </div>`
+  ).join('');
+}
+
+function toggleNotifPanel() {
+  const panel = document.getElementById('notifPanel');
+  if (!panel) return;
+  const wasHidden = panel.classList.contains('app-hidden');
+  panel.classList.toggle('app-hidden');
+  if (wasHidden) renderNotifPanel();
+}
+
 /* ============ TOAST ============ */
 function showToast(message, type, duration = 4000) {
   const container = document.getElementById('toastContainer');
@@ -80,6 +105,11 @@ function showToast(message, type, duration = 4000) {
   el.textContent = message;
   container.appendChild(el);
   if (type === 'error' || type === 'warning') fireDesktopNotif(message);
+
+  notificationHistory.push({ id: ++notifIdCounter, message, type, time: new Date() });
+  const panel = document.getElementById('notifPanel');
+  if (panel && !panel.classList.contains('app-hidden')) renderNotifPanel();
+
   setTimeout(() => { if (el.parentNode) el.remove(); }, duration);
 }
 
@@ -125,7 +155,19 @@ async function showDashboard() {
   }
   renderAll();
 
-  if ('Notification' in window) updateNotifBtn(Notification.permission);
+  if ('Notification' in window) {
+    updateNotifBtn(Notification.permission);
+    const permBtn = document.getElementById('notifPermBtn');
+    if (permBtn) {
+      if (Notification.permission === 'granted') {
+        permBtn.textContent = '✓ Desktop notifications enabled';
+        permBtn.classList.add('granted');
+      } else if (Notification.permission === 'denied') {
+        permBtn.textContent = 'Notifications blocked';
+        permBtn.disabled = true;
+      }
+    }
+  }
 
   const { data: { user } } = await supabase.auth.getUser();
   if (user) {
@@ -283,7 +325,28 @@ supabase.auth.onAuthStateChange((event, session) => {
   }
 });
 
-document.getElementById('notifBtn').addEventListener('click', requestNotifPermission);
+document.getElementById('notifBtn').addEventListener('click', toggleNotifPanel);
+
+document.getElementById('notifPanelClear').addEventListener('click', () => {
+  notificationHistory = [];
+  renderNotifPanel();
+});
+
+document.getElementById('notifPermBtn').addEventListener('click', async () => {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'granted') return;
+  const result = await Notification.requestPermission();
+  updateNotifBtn(result);
+  const btn = document.getElementById('notifPermBtn');
+  if (result === 'granted') {
+    btn.textContent = '✓ Desktop notifications enabled';
+    btn.classList.add('granted');
+    new Notification('Orbit', { body: 'You\'re all set!' });
+  } else if (result === 'denied') {
+    btn.textContent = 'Notifications blocked';
+    btn.disabled = true;
+  }
+});
 
 document.getElementById('logoutBtn').addEventListener('click', async () => {
   await supabase.auth.signOut();
