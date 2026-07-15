@@ -5,7 +5,7 @@
 
 import { supabase } from './supabase-client.js';
 import {
-  getTasks, addTask, toggleTask, deleteTask,
+  getTasks, addTask, toggleTask, deleteTask, updateTask,
   getPlans, updatePlanProgress,
   getHistory, upsertTodayHistory,
   getProfile,
@@ -45,6 +45,7 @@ let deadlineInterval = null;
 let notificationHistory = [];
 let notifIdCounter = 0;
 let skipNextRealtime = false;
+let editingTaskId = null;
 
 /* ============ NOTIFICATIONS ============ */
 function updateNotifBtn(state) {
@@ -411,7 +412,10 @@ function taskItemHTML(t) {
     <div class="task-body">
       <div class="task-top">
         <div class="task-title">${escapeHTML(t.title)}</div>
-        <button class="task-del" data-del="${t.id}">✕</button>
+        <div class="task-actions">
+          <button class="task-del" data-edit="${t.id}" title="Edit">✎</button>
+          <button class="task-del" data-del="${t.id}">✕</button>
+        </div>
       </div>
       ${t.desc ? `<div class="task-desc">${escapeHTML(t.desc)}</div>` : ''}
       <div class="task-tags">
@@ -454,6 +458,31 @@ function attachTaskEvents(root) {
       renderTimeline();
     });
   });
+  root.querySelectorAll('[data-edit]').forEach(el => {
+    el.addEventListener('click', () => {
+      const task = state.tasks.find(t => t.id === el.dataset.edit);
+      if (!task) return;
+      editingTaskId = task.id;
+      document.getElementById('taskTitle').value = task.title;
+      document.getElementById('taskDesc').value = task.desc || '';
+      document.getElementById('taskCategory').value = task.category;
+      document.getElementById('taskPriority').value = task.priority;
+      document.getElementById('taskTime').value = task.time || '';
+      document.getElementById('taskDate').value = task.date;
+      document.getElementById('addTaskBtn').textContent = '✎ Update';
+      document.getElementById('taskTitle').focus();
+      document.getElementById('cancelEditBtn').style.display = '';
+    });
+  });
+}
+
+function cancelEdit() {
+  editingTaskId = null;
+  document.getElementById('taskTitle').value = '';
+  document.getElementById('taskDesc').value = '';
+  document.getElementById('taskTime').value = '';
+  document.getElementById('addTaskBtn').textContent = '+ Add Task';
+  document.getElementById('cancelEditBtn').style.display = 'none';
 }
 
 function escapeHTML(str) {
@@ -461,6 +490,9 @@ function escapeHTML(str) {
   div.textContent = str;
   return div.innerHTML;
 }
+
+document.getElementById('cancelEditBtn')?.addEventListener('click', cancelEdit);
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && editingTaskId) cancelEdit(); });
 
 document.getElementById('addTaskBtn').addEventListener('click', async () => {
   const title = document.getElementById('taskTitle').value.trim();
@@ -470,6 +502,26 @@ document.getElementById('addTaskBtn').addEventListener('click', async () => {
   const priority = document.getElementById('taskPriority').value;
   const time = document.getElementById('taskTime').value.trim();
   const date = document.getElementById('taskDate').value || todayISO;
+
+  if (editingTaskId) {
+    skipNextRealtime = true;
+    const idx = state.tasks.findIndex(t => t.id === editingTaskId);
+    const oldDate = idx !== -1 ? state.tasks[idx].date : null;
+    const changes = { title, desc, category, priority, time, date };
+    await updateTask(editingTaskId, changes);
+    if (idx !== -1) Object.assign(state.tasks[idx], changes);
+    showToast(`✎ "${title}" updated`, 'success');
+    cancelEdit();
+    renderTasks();
+    renderPriority();
+    renderReport();
+    renderTimeline();
+    if (oldDate && oldDate !== date) {
+      await loadTaskDatesForMonth();
+      renderCalendar();
+    }
+    return;
+  }
 
   skipNextRealtime = true;
 

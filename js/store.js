@@ -92,6 +92,31 @@ export async function deleteTask(id) {
   }
 }
 
+/** Update fields on an existing task (title, description, category, priority, time, date). */
+export async function updateTask(id, partial) {
+  try {
+    await getUserId();
+    const dbPartial = {};
+    if ('title' in partial) dbPartial.title = partial.title;
+    if ('desc' in partial) dbPartial.description = partial.desc;
+    if ('category' in partial) dbPartial.category = partial.category;
+    if ('priority' in partial) dbPartial.priority = partial.priority;
+    if ('time' in partial) dbPartial.time = partial.time;
+    if ('date' in partial) dbPartial.task_date = partial.date;
+    const { data, error } = await supabase
+      .from('tasks')
+      .update(dbPartial)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return fromDbTask(data);
+  } catch (err) {
+    console.error('store.updateTask:', err);
+    throw err;
+  }
+}
+
 /* ---------- plans ---------- */
 
 /** All ongoing plans for the current user. */
