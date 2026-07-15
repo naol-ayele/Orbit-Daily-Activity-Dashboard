@@ -447,6 +447,8 @@ function attachTaskEvents(root) {
       const id = el.dataset.del;
       const task = state.tasks.find(t => t.id === id);
       if (!task) return;
+      if (!confirm(`Delete "${task.title}"? This cannot be undone.`)) return;
+      if (!state.tasks.find(t => t.id === id)) return;
       skipNextRealtime = true;
       const idx = state.tasks.indexOf(task);
       if (idx !== -1) state.tasks.splice(idx, 1);
