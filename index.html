@@ -235,6 +235,17 @@
   .chip.active{ color: var(--text); border-color: var(--line-2); background: var(--panel-2); }
   .chip .swatch{ width:7px;height:7px;border-radius:50%; }
 
+  /* ---------- search bar ---------- */
+  .search-bar{ display:flex; gap:8px; margin-bottom:12px; }
+  .search-bar input{
+    flex:1; background:var(--panel); border:1px solid var(--line); border-radius:8px;
+    padding:8px 14px; color:var(--text); font-size:13px; font-family:inherit; outline:none;
+    transition:border-color .15s;
+  }
+  .search-bar input:focus{ border-color:var(--violet); }
+  .date-scope-toggle{ white-space:nowrap; cursor:pointer; font-size:12px; }
+  .date-scope-toggle.active{ background:var(--violet); color:#0b0c10; border-color:var(--violet); font-weight:600; }
+
   /* ---------- task list ---------- */
   .task-list{ display:flex; flex-direction:column; gap:9px; }
   .task-item{
@@ -556,7 +567,12 @@
 
     <!-- TASKS -->
     <section id="tasks">
-      <div class="section-head"><h3><span class="tag"></span>Today's Task List</h3><span class="count" id="taskCount">0 tasks</span></div>
+      <div class="section-head"><h3><span class="tag"></span>Task List</h3><span class="count" id="taskCount">0 tasks</span></div>
+
+      <div class="search-bar">
+        <input type="text" id="taskSearch" placeholder="🔍 Search tasks by title or description…">
+        <button class="chip date-scope-toggle" id="dateScopeBtn">📅 Today</button>
+      </div>
 
       <div class="task-input-card">
         <div class="task-input-row">

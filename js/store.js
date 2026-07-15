@@ -38,6 +38,23 @@ export async function getTasks(date) {
   }
 }
 
+/** All tasks for the current user (no date filter). */
+export async function getAllTasks() {
+  try {
+    const userId = await getUserId();
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at');
+    if (error) throw error;
+    return (data || []).map(fromDbTask);
+  } catch (err) {
+    console.error('store.getAllTasks:', err);
+    throw err;
+  }
+}
+
 /** Insert a new task. Returns the created task with its server-generated id. */
 export async function addTask(task) {
   try {

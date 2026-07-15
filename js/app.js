@@ -5,7 +5,7 @@
 
 import { supabase } from './supabase-client.js';
 import {
-  getTasks, addTask, toggleTask, deleteTask, updateTask,
+  getTasks, getAllTasks, addTask, toggleTask, deleteTask, updateTask,
   getPlans, updatePlanProgress,
   getHistory, upsertTodayHistory,
   getProfile,
@@ -36,7 +36,9 @@ let state = {
   history: [],
   taskDates: new Set(),
   heatmapData: [],
-  reportView: 'day'
+  reportView: 'day',
+  searchQuery: '',
+  showAllDates: false
 };
 
 let confettiFiredToday = false;
@@ -219,7 +221,7 @@ async function loadAllData() {
 
 async function loadTasks() {
   try {
-    state.tasks = await getTasks(state.selectedDate);
+    state.tasks = state.showAllDates ? await getAllTasks() : await getTasks(state.selectedDate);
   } catch {
     state.tasks = [];
   }
@@ -429,13 +431,23 @@ function todaysTasks() {
   return state.tasks.filter(t => t.date === state.selectedDate);
 }
 
+function getDisplayTasks() {
+  let items = state.showAllDates ? state.tasks : todaysTasks();
+  if (state.searchQuery) {
+    const q = state.searchQuery.toLowerCase();
+    items = items.filter(t => t.title.toLowerCase().includes(q) || (t.desc || '').toLowerCase().includes(q));
+  }
+  return items;
+}
+
 function renderTasks() {
   const list = document.getElementById('taskList');
-  let items = todaysTasks();
+  let items = getDisplayTasks();
   if (state.activeCategory !== 'All') items = items.filter(t => t.category === state.activeCategory);
   items = [...items].sort((a, b) => a.done - b.done);
 
-  document.getElementById('taskCount').textContent = `${todaysTasks().filter(t => !t.done).length} open · ${todaysTasks().length} total`;
+  const all = getDisplayTasks();
+  document.getElementById('taskCount').textContent = `${all.filter(t => !t.done).length} open · ${all.length} total`;
 
   if (items.length === 0) {
     list.innerHTML = `<div class="task-item" style="justify-content:center; color:var(--text-faint); font-style:italic;">No tasks in this view yet.</div>`;
@@ -569,6 +581,28 @@ function showConfirmDialog(message) {
 
 document.getElementById('cancelEditBtn')?.addEventListener('click', cancelEdit);
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && editingTaskId) cancelEdit(); });
+
+/* ---------- search / date scope ---------- */
+let searchDebounce = null;
+document.getElementById('taskSearch')?.addEventListener('input', e => {
+  clearTimeout(searchDebounce);
+  searchDebounce = setTimeout(() => {
+    state.searchQuery = e.target.value.trim();
+    renderTasks();
+    renderPriority();
+  }, 200);
+});
+document.getElementById('dateScopeBtn')?.addEventListener('click', async () => {
+  state.showAllDates = !state.showAllDates;
+  const btn = document.getElementById('dateScopeBtn');
+  btn.textContent = state.showAllDates ? '📅 All dates' : '📅 Today';
+  btn.classList.toggle('active', state.showAllDates);
+  await loadTasks();
+  renderTasks();
+  renderPriority();
+  renderTimeline();
+  renderReport();
+});
 
 document.getElementById('addTaskBtn').addEventListener('click', async () => {
   const title = document.getElementById('taskTitle').value.trim();
@@ -712,6 +746,12 @@ function renderCalendar() {
   grid.querySelectorAll('.cal-day[data-date]').forEach(el => {
     el.addEventListener('click', async () => {
       state.selectedDate = el.dataset.date;
+      if (state.showAllDates) {
+        state.showAllDates = false;
+        const btn = document.getElementById('dateScopeBtn');
+        btn.textContent = '📅 Today';
+        btn.classList.remove('active');
+      }
       await loadTasks();
       renderCalendar();
       renderTasks();
