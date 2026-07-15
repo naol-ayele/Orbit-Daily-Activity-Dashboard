@@ -44,6 +44,7 @@ let notifiedDeadlines = new Set();
 let deadlineInterval = null;
 let notificationHistory = [];
 let notifIdCounter = 0;
+let skipNextRealtime = false;
 
 /* ============ NOTIFICATIONS ============ */
 function updateNotifBtn(state) {
@@ -247,9 +248,7 @@ function renderAll() {
 
 /* ============ REALTIME ============ */
 async function handleTaskChange() {
-  const now = Date.now();
-  if (now - lastRealtimeUpdate < 1000) return;
-  lastRealtimeUpdate = now;
+  if (skipNextRealtime) { skipNextRealtime = false; return; }
   try {
     await Promise.all([loadTasks(), loadTaskDatesForMonth()]);
     renderTasks();
@@ -428,13 +427,12 @@ function attachTaskEvents(root) {
   root.querySelectorAll('[data-check]').forEach(el => {
     el.addEventListener('click', async () => {
       const id = el.dataset.check;
-      const wasDone = state.tasks.find(t => t.id === id)?.done;
-      await toggleTask(id);
-      await loadTasks();
       const task = state.tasks.find(t => t.id === id);
-      if (task) {
-        showToast(task.done ? `✓ "${task.title}" done!` : `↩ "${task.title}" reopened`, task.done ? 'success' : 'warning');
-      }
+      if (!task) return;
+      skipNextRealtime = true;
+      task.done = !task.done;
+      await toggleTask(id);
+      showToast(task.done ? `✓ "${task.title}" done!` : `↩ "${task.title}" reopened`, task.done ? 'success' : 'warning');
       renderTasks();
       renderPriority();
       renderReport();
@@ -444,10 +442,12 @@ function attachTaskEvents(root) {
     el.addEventListener('click', async () => {
       const id = el.dataset.del;
       const task = state.tasks.find(t => t.id === id);
+      if (!task) return;
+      skipNextRealtime = true;
+      const idx = state.tasks.indexOf(task);
+      if (idx !== -1) state.tasks.splice(idx, 1);
       await deleteTask(id);
-      showToast(`🗑 "${task ? task.title : id}" deleted`, 'warning');
-      await loadTasks();
-      await loadTaskDatesForMonth();
+      showToast(`🗑 "${task.title}" deleted`, 'warning');
       renderTasks();
       renderPriority();
       renderReport();
@@ -471,7 +471,11 @@ document.getElementById('addTaskBtn').addEventListener('click', async () => {
   const time = document.getElementById('taskTime').value.trim();
   const date = document.getElementById('taskDate').value || todayISO;
 
-  await addTask({ title, desc, category, priority, time, date });
+  skipNextRealtime = true;
+
+  const created = await addTask({ title, desc, category, priority, time, date });
+  state.tasks.push(created);
+  if (date && !state.taskDates.has(date)) state.taskDates.add(date);
 
   showToast(`✓ "${title}" added`, 'success');
 
@@ -479,8 +483,6 @@ document.getElementById('addTaskBtn').addEventListener('click', async () => {
   document.getElementById('taskDesc').value = '';
   document.getElementById('taskTime').value = '';
 
-  await loadTasks();
-  await loadTaskDatesForMonth();
   renderTasks();
   renderPriority();
   renderTimeline();
