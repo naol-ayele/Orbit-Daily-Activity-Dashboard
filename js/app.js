@@ -549,6 +549,20 @@ function renderTasks() {
   attachTaskEvents(list);
   updateDailyGoal();
   updateStreakAndConfetti();
+
+  const visibleIds = items.map(t => t.id);
+  Promise.all(visibleIds.map(id => {
+    if (state.subtasksCache[id]) return;
+    return getSubtasks(id).then(subs => {
+      state.subtasksCache[id] = subs;
+      const card = list.querySelector(`[data-id="${id}"]`);
+      const summary = card?.querySelector('.subtask-summary');
+      if (summary) {
+        const done = subs.filter(s => s.done).length;
+        summary.textContent = `📋 ${done}/${subs.length} subtasks ${state.expandedTasks.has(id) ? '▾' : '▸'}`;
+      }
+    });
+  })).catch(() => {});
 }
 
 function taskItemHTML(t) {
@@ -572,6 +586,8 @@ function taskItemHTML(t) {
         <span class="tagpill prio-${t.priority}">${t.priority}</span>
         <span class="tagpill cat-pill" style="border-color:${catColor}55;">${t.category}</span>
         ${t.time ? `<span class="tagpill cat-pill">🕐 ${t.time}</span>` : ''}
+        ${t.recurrence ? `<span class="tagpill cat-pill">🔄 ${t.recurrence.replace('weekly:', 'Wk: ')}</span>` : ''}
+        ${!t.recurrence && t.recurrence_parent_id ? `<span class="tagpill cat-pill">🔄 Recurring</span>` : ''}
       </div>
       <div class="subtask-section">
         <div class="subtask-summary" data-expand="${t.id}">
@@ -641,7 +657,16 @@ function attachTaskEvents(root) {
       document.getElementById('taskTime').value = task.time || '';
       document.getElementById('taskDate').value = task.date;
       document.getElementById('taskRemind').value = task.reminder_minutes_before != null ? String(task.reminder_minutes_before) : '';
-      document.getElementById('taskRepeat').value = task.recurrence || '';
+      if (task.recurrence) {
+        document.getElementById('taskRepeat').value = task.recurrence;
+      } else if (task.recurrence_parent_id) {
+        document.getElementById('taskRepeat').value = '';
+        supabase.from('tasks').select('recurrence').eq('id', task.recurrence_parent_id).single()
+          .then(({ data }) => { if (data?.recurrence) document.getElementById('taskRepeat').value = data.recurrence; })
+          .catch(() => {});
+      } else {
+        document.getElementById('taskRepeat').value = '';
+      }
       document.getElementById('addTaskBtn').textContent = '✎ Update';
       document.getElementById('taskTitle').focus();
       document.getElementById('cancelEditBtn').style.display = '';
@@ -815,33 +840,49 @@ document.getElementById('addTaskBtn').addEventListener('click', async () => {
   }
 
   const repeatVal = document.getElementById('taskRepeat').value;
+  const addBtn = document.getElementById('addTaskBtn');
 
   skipNextRealtime = true;
+  addBtn.disabled = true;
 
-  if (repeatVal) {
-    const tmpl = await addTask({ title, desc, category, priority, time, date, reminder_minutes_before, recurrence: repeatVal, is_template: true });
-    const instance = await addTask({ title, desc, category, priority, time, date: date, reminder_minutes_before, recurrence_parent_id: tmpl.id, is_template: false });
-    state.tasks.push(instance);
-    if (date && !state.taskDates.has(date)) state.taskDates.add(date);
-  } else {
-    const created = await addTask({ title, desc, category, priority, time, date, reminder_minutes_before });
-    state.tasks.push(created);
-    if (date && !state.taskDates.has(date)) state.taskDates.add(date);
-  }
-
-  showToast(`✓ "${title}" added`, 'success');
-
-  document.getElementById('taskTitle').value = '';
-  document.getElementById('taskDesc').value = '';
-  document.getElementById('taskTime').value = '';
-  document.getElementById('taskRemind').value = '';
-  document.getElementById('taskRepeat').value = '';
-
+  const tempId = 'temp-' + Date.now();
+  const tempTask = { id: tempId, title, desc, category, priority, time, date, reminder_minutes_before, done: false, is_template: false };
+  state.tasks.push(tempTask);
+  if (date && !state.taskDates.has(date)) state.taskDates.add(date);
   renderTasks();
   renderPriority();
   renderTimeline();
   renderReport();
   renderCalendar();
+
+  try {
+    if (repeatVal) {
+      const tmpl = await addTask({ title, desc, category, priority, time, date, reminder_minutes_before, recurrence: repeatVal, is_template: true });
+      const instance = await addTask({ title, desc, category, priority, time, date, reminder_minutes_before, recurrence_parent_id: tmpl.id, is_template: false });
+      const idx = state.tasks.findIndex(t => t.id === tempId);
+      if (idx !== -1) state.tasks.splice(idx, 1, instance); else state.tasks.push(instance);
+    } else {
+      const created = await addTask({ title, desc, category, priority, time, date, reminder_minutes_before });
+      const idx = state.tasks.findIndex(t => t.id === tempId);
+      if (idx !== -1) state.tasks.splice(idx, 1, created); else state.tasks.push(created);
+    }
+
+    showToast(`✓ "${title}" added`, 'success');
+
+    document.getElementById('taskTitle').value = '';
+    document.getElementById('taskDesc').value = '';
+    document.getElementById('taskTime').value = '';
+    document.getElementById('taskRemind').value = '';
+    document.getElementById('taskRepeat').value = '';
+
+    renderTasks();
+    renderPriority();
+    renderTimeline();
+    renderReport();
+    renderCalendar();
+  } finally {
+    addBtn.disabled = false;
+  }
 });
 
 /* ---------- report toggle ---------- */
