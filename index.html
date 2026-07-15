@@ -94,6 +94,26 @@
   .streak-num{ font-family:'Unbounded',sans-serif; font-size: 26px; margin: 2px 0; background: var(--grad-1); -webkit-background-clip:text; background-clip:text; color:transparent; }
   .streak-label{ font-size: 11px; color: var(--text-faint); text-transform:uppercase; letter-spacing: 1px; }
 
+  /* ---------- heatmap ---------- */
+  .heatmap-section{ margin-top:16px; }
+  .heatmap-label{ font-size:11px; color:var(--text-faint); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; }
+  .heatmap-grid{ display:flex; gap:2px; overflow-x:auto; padding-bottom:4px; }
+  .heatmap-col{ display:flex; flex-direction:column; gap:2px; }
+  .heat-cell{ width:10px; height:10px; border-radius:2px; background:var(--panel-2); flex-shrink:0; position:relative; cursor:default; }
+  .heat-cell.l1{ background:rgba(167,139,250,0.2); }
+  .heat-cell.l2{ background:rgba(167,139,250,0.4); }
+  .heat-cell.l3{ background:rgba(167,139,250,0.65); }
+  .heat-cell.l4{ background:rgba(167,139,250,0.9); }
+  .heat-cell .heat-tip{
+    position:absolute; bottom:calc(100% + 6px); left:50%; transform:translateX(-50%);
+    background:#1a1b23; border:1px solid var(--line); border-radius:6px;
+    padding:4px 8px; font-size:10.5px; white-space:nowrap; color:var(--text);
+    pointer-events:none; opacity:0; transition:opacity .15s; z-index:100;
+  }
+  .heat-cell:hover .heat-tip{ opacity:1; }
+  .heatmap-legend{ display:flex; align-items:center; gap:3px; margin-top:6px; font-size:10px; color:var(--text-faint); }
+  .heatmap-legend .heat-cell{ width:8px; height:8px; }
+
   main{ padding: 30px 34px 70px; max-width: 1360px; }
 
   .topbar{ display:flex; justify-content:space-between; align-items:flex-end; margin-bottom: 26px; flex-wrap:wrap; gap:14px;}
@@ -453,6 +473,19 @@
       <div class="streak-flame">🔥</div>
       <div class="streak-num mono" id="streakNum">7</div>
       <div class="streak-label">Day Streak</div>
+    </div>
+    <div class="heatmap-section">
+      <div class="heatmap-label">Activity</div>
+      <div id="heatmapGrid" class="heatmap-grid"></div>
+      <div class="heatmap-legend">
+        <span>Less</span>
+        <span class="heat-cell l0"></span>
+        <span class="heat-cell l1"></span>
+        <span class="heat-cell l2"></span>
+        <span class="heat-cell l3"></span>
+        <span class="heat-cell l4"></span>
+        <span>More</span>
+      </div>
     </div>
     <button id="logoutBtn" class="logout-btn">↩ Log out</button>
   </aside>

@@ -34,7 +34,8 @@ let state = {
   tasks: [],
   plans: [],
   history: [],
-  taskDates: new Set()
+  taskDates: new Set(),
+  heatmapData: []
 };
 
 let confettiFiredToday = false;
@@ -187,11 +188,13 @@ function showLogin() {
 }
 
 async function loadAllData() {
-  const [profile, plans, history] = await Promise.all([
+  const [profile, plans, history, heatmapHistory] = await Promise.all([
     getProfile().catch(() => null),
     getPlans().catch(() => []),
-    getHistory(7).catch(() => [])
+    getHistory(7).catch(() => []),
+    getHistory(365).catch(() => [])
   ]);
+  state.heatmapData = heatmapHistory;
 
   state.plans = plans;
 
@@ -234,6 +237,44 @@ async function loadTaskDatesForMonth() {
   }
 }
 
+/* ---------- heatmap ---------- */
+function renderHeatmap() {
+  const grid = document.getElementById('heatmapGrid');
+  if (!grid) return;
+  const data = state.heatmapData || [];
+  const map = {};
+  for (const entry of data) map[entry.entry_date] = entry.completion_pct;
+
+  const today = new Date();
+  const end = new Date(today);
+  const start = new Date(today);
+  start.setDate(start.getDate() - 364);
+  const dayOfWeek = start.getDay();
+  start.setDate(start.getDate() - dayOfWeek);
+
+  let html = '';
+  const cursor = new Date(start);
+  while (cursor <= end) {
+    html += '<div class="heatmap-col">';
+    for (let d = 0; d < 7; d++) {
+      const iso = cursor.toISOString().slice(0, 10);
+      const pct = map[iso];
+      let level = 0;
+      if (pct !== undefined) {
+        if (pct >= 100) level = 4;
+        else if (pct >= 66) level = 3;
+        else if (pct >= 33) level = 2;
+        else if (pct > 0) level = 1;
+      }
+      const tip = pct !== undefined ? `${iso}: ${Math.round(pct)}%` : iso;
+      html += `<div class="heat-cell l${level}"><span class="heat-tip">${tip}</span></div>`;
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    html += '</div>';
+  }
+  grid.innerHTML = html;
+}
+
 function renderAll() {
   renderGreeting();
   renderCategoryChips();
@@ -243,6 +284,7 @@ function renderAll() {
   renderCalendar();
   renderPlans();
   renderReport();
+  renderHeatmap();
   document.getElementById('streakNum').textContent = state.streak;
   document.getElementById('taskDate').value = todayISO;
 }
