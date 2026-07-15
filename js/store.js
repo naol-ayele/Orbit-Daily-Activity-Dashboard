@@ -109,6 +109,24 @@ export async function deleteTask(id) {
   }
 }
 
+/** All task templates (recurring task definitions). */
+export async function getAllTemplates() {
+  try {
+    const userId = await getUserId();
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('is_template', true)
+      .order('created_at');
+    if (error) throw error;
+    return (data || []).map(fromDbTask);
+  } catch (err) {
+    console.error('store.getAllTemplates:', err);
+    throw err;
+  }
+}
+
 /** Update fields on an existing task (title, description, category, priority, time, date). */
 export async function updateTask(id, partial) {
   try {

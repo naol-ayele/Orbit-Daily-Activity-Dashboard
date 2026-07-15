@@ -5,7 +5,7 @@
 
 import { supabase } from './supabase-client.js';
 import {
-  getTasks, getAllTasks, addTask, toggleTask, deleteTask, updateTask,
+  getTasks, getAllTasks, addTask, toggleTask, deleteTask, updateTask, getAllTemplates,
   getPlans, updatePlanProgress,
   getHistory, upsertTodayHistory,
   getProfile,
@@ -230,9 +230,43 @@ async function loadAllData() {
   await loadTaskDatesForMonth();
 }
 
+/* ---------- recurring tasks ---------- */
+function matchesRecurrence(recurrence, date) {
+  if (!recurrence) return false;
+  if (recurrence === 'daily') return true;
+  const days = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+  const dayLabel = days[date.getDay()];
+  return recurrence.includes(dayLabel);
+}
+
+async function generateInstancesForDate(dateStr) {
+  try {
+    const templates = await getAllTemplates();
+    if (!templates.length) return;
+    const date = new Date(dateStr + 'T00:00:00');
+    const { data: existing } = await supabase
+      .from('tasks')
+      .select('recurrence_parent_id')
+      .eq('task_date', dateStr)
+      .not('recurrence_parent_id', 'is', null);
+    const existingIds = new Set((existing || []).map(r => r.recurrence_parent_id));
+    for (const tmpl of templates) {
+      if (!matchesRecurrence(tmpl.recurrence, date)) continue;
+      if (existingIds.has(tmpl.id)) continue;
+      await addTask({
+        title: tmpl.title, desc: tmpl.desc, category: tmpl.category,
+        priority: tmpl.priority, time: tmpl.time || '', date: dateStr,
+        recurrence_parent_id: tmpl.id, is_template: false
+      });
+    }
+  } catch (_) {}
+}
+
 async function loadTasks() {
   try {
-    state.tasks = state.showAllDates ? await getAllTasks() : await getTasks(state.selectedDate);
+    if (!state.showAllDates) await generateInstancesForDate(state.selectedDate);
+    const raw = state.showAllDates ? await getAllTasks() : await getTasks(state.selectedDate);
+    state.tasks = (raw || []).filter(t => !t.is_template);
   } catch {
     state.tasks = [];
   }
@@ -539,6 +573,7 @@ function attachTaskEvents(root) {
       document.getElementById('taskTime').value = task.time || '';
       document.getElementById('taskDate').value = task.date;
       document.getElementById('taskRemind').value = task.reminder_minutes_before != null ? String(task.reminder_minutes_before) : '';
+      document.getElementById('taskRepeat').value = task.recurrence || '';
       document.getElementById('addTaskBtn').textContent = '✎ Update';
       document.getElementById('taskTitle').focus();
       document.getElementById('cancelEditBtn').style.display = '';
@@ -633,8 +668,16 @@ document.getElementById('addTaskBtn').addEventListener('click', async () => {
     const idx = state.tasks.findIndex(t => t.id === editingTaskId);
     const oldDate = idx !== -1 ? state.tasks[idx].date : null;
     const changes = { title, desc, category, priority, time, date, reminder_minutes_before, reminder_fired_at: null };
+    const task = state.tasks[idx];
+    const repeatVal = document.getElementById('taskRepeat').value;
+    if (repeatVal) changes.recurrence = repeatVal;
     await updateTask(editingTaskId, changes);
     if (idx !== -1) Object.assign(state.tasks[idx], changes);
+    if (task && task.recurrence_parent_id) {
+      const tChanges = { title, desc, category, priority, time };
+      if (repeatVal) tChanges.recurrence = repeatVal;
+      await updateTask(task.recurrence_parent_id, tChanges).catch(() => {});
+    }
     showToast(`✎ "${title}" updated`, 'success');
     cancelEdit();
     renderTasks();
@@ -648,11 +691,20 @@ document.getElementById('addTaskBtn').addEventListener('click', async () => {
     return;
   }
 
+  const repeatVal = document.getElementById('taskRepeat').value;
+
   skipNextRealtime = true;
 
-  const created = await addTask({ title, desc, category, priority, time, date, reminder_minutes_before });
-  state.tasks.push(created);
-  if (date && !state.taskDates.has(date)) state.taskDates.add(date);
+  if (repeatVal) {
+    const tmpl = await addTask({ title, desc, category, priority, time, date, reminder_minutes_before, recurrence: repeatVal, is_template: true });
+    const instance = await addTask({ title, desc, category, priority, time, date: date, reminder_minutes_before, recurrence_parent_id: tmpl.id, is_template: false });
+    state.tasks.push(instance);
+    if (date && !state.taskDates.has(date)) state.taskDates.add(date);
+  } else {
+    const created = await addTask({ title, desc, category, priority, time, date, reminder_minutes_before });
+    state.tasks.push(created);
+    if (date && !state.taskDates.has(date)) state.taskDates.add(date);
+  }
 
   showToast(`✓ "${title}" added`, 'success');
 
@@ -660,6 +712,7 @@ document.getElementById('addTaskBtn').addEventListener('click', async () => {
   document.getElementById('taskDesc').value = '';
   document.getElementById('taskTime').value = '';
   document.getElementById('taskRemind').value = '';
+  document.getElementById('taskRepeat').value = '';
 
   renderTasks();
   renderPriority();

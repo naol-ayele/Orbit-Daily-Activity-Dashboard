@@ -213,6 +213,8 @@
   input:focus, textarea:focus, select:focus{ border-color: var(--violet); }
   textarea{ resize:vertical; min-height: 46px; }
   .task-meta-row{ display:grid; grid-template-columns: repeat(5,1fr); gap: 10px; }
+  .task-repeat-row{ margin-top:8px; }
+  .task-repeat-row select{ width:auto; min-width:200px; }
   .btn-primary{
     background: var(--grad-3); border:none; color:#0b0c10; font-weight:700; font-size:13.5px;
     border-radius: 10px; padding: 10px 20px; white-space:nowrap;
@@ -601,6 +603,16 @@
             <option value="5">5 min before</option>
             <option value="10">10 min before</option>
             <option value="30">30 min before</option>
+          </select>
+        </div>
+        <div class="task-repeat-row">
+          <select id="taskRepeat">
+            <option value="">No repeat</option>
+            <option value="daily">Daily</option>
+            <option value="weekly:mon,wed,fri">Weekly: Mon, Wed, Fri</option>
+            <option value="weekly:tue,thu">Weekly: Tue, Thu</option>
+            <option value="weekly:mon,tue,wed,thu,fri">Weekly: Mon–Fri</option>
+            <option value="weekly:sat,sun">Weekly: Sat, Sun</option>
           </select>
         </div>
       </div>
