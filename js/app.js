@@ -7,11 +7,11 @@ import { supabase } from './supabase-client.js';
 import {
   getTasks, getAllTasks, addTask, toggleTask, deleteTask, updateTask, getAllTemplates,
   getSubtasks, addSubtask, toggleSubtask, deleteSubtask,
-  getPlans, updatePlanProgress,
-  getHistory, upsertTodayHistory,
-  getProfile,
-  getTaskDatesInRange,
-  checkAndResetStreak, updateStreakIfAllDone,
+   getPlans, addPlan, updatePlanProgress,
+   getHistory, upsertTodayHistory,
+   getProfile, updateProfile,
+   getTaskDatesInRange,
+   checkAndResetStreak, updateStreakIfAllDone,
   subscribeToTasks
 } from './store.js';
 
@@ -32,6 +32,10 @@ let state = {
   selectedDate: todayISO,
   streak: 0,
   dailyGoalTarget: 5,
+  monthlyGoalTitle: '',
+  monthlyGoalProgress: 0,
+  weeklyGoalTitle: '',
+  weeklyGoalProgress: 0,
   tasks: [],
   plans: [],
   history: [],
@@ -46,7 +50,6 @@ let state = {
 
 let confettiFiredToday = false;
 let tasksSubscription = null;
-let lastRealtimeUpdate = 0;
 let notifiedDeadlines = new Set();
 let deadlineInterval = null;
 let notificationHistory = [];
@@ -230,6 +233,10 @@ async function loadAllData() {
 
   if (profile) {
     state.dailyGoalTarget = profile.daily_goal_target || 5;
+    state.monthlyGoalTitle = profile.monthly_goal_title || '';
+    state.monthlyGoalProgress = profile.monthly_goal_progress || 0;
+    state.weeklyGoalTitle = profile.weekly_goal_title || '';
+    state.weeklyGoalProgress = profile.weekly_goal_progress || 0;
     confettiFiredToday = profile.last_completed_date === todayISO;
   }
 
@@ -305,8 +312,7 @@ function renderHeatmap() {
 
   const today = new Date();
   const end = new Date(today);
-  const start = new Date(today);
-  start.setDate(start.getDate() - 364);
+  const start = new Date(today.getFullYear(), 0, 1);
   const dayOfWeek = start.getDay();
   start.setDate(start.getDate() - dayOfWeek);
 
@@ -338,6 +344,7 @@ function renderAll() {
   renderCategoryChips();
   renderTasks();
   renderPriority();
+  renderGoals();
   renderTimeline();
   renderCalendar();
   renderPlans();
@@ -381,6 +388,7 @@ async function flushOfflineQueue() {
       else if (op.type === 'addSubtask') await addSubtask(op.payload.taskId, op.payload.title);
       else if (op.type === 'toggleSubtask') await toggleSubtask(op.payload);
       else if (op.type === 'deleteSubtask') await deleteSubtask(op.payload);
+      else if (op.type === 'addPlan') await addPlan(op.payload.title, op.payload.category, op.payload.note);
       else if (op.type === 'updatePlanProgress') await updatePlanProgress(op.payload.id, op.payload.progress);
       else if (op.type === 'upsertTodayHistory') await upsertTodayHistory(op.payload);
       else if (op.type === 'updateProfile') await updateProfile(op.payload);
@@ -415,7 +423,7 @@ export async function init() {
 }
 
 /* ============ AUTH FORM ============ */
-document.getElementById('authForm').addEventListener('submit', async (e) => {
+document.getElementById('authForm')?.addEventListener('submit', async (e) => {
   e.preventDefault();
   const email = document.getElementById('authEmail').value.trim();
   const password = document.getElementById('authPassword').value;
@@ -450,7 +458,7 @@ document.getElementById('authForm').addEventListener('submit', async (e) => {
   }
 });
 
-document.getElementById('authToggleBtn').addEventListener('click', () => {
+document.getElementById('authToggleBtn')?.addEventListener('click', () => {
   authMode = authMode === 'login' ? 'signup' : 'login';
   document.getElementById('authTitle').textContent = authMode === 'login' ? 'Log in' : 'Sign up';
   document.getElementById('authSubmitBtn').textContent = authMode === 'login' ? 'Log In' : 'Sign Up';
@@ -469,14 +477,14 @@ supabase.auth.onAuthStateChange((event, session) => {
   }
 });
 
-document.getElementById('notifBtn').addEventListener('click', toggleNotifPanel);
+document.getElementById('notifBtn')?.addEventListener('click', toggleNotifPanel);
 
-document.getElementById('notifPanelClear').addEventListener('click', () => {
+document.getElementById('notifPanelClear')?.addEventListener('click', () => {
   notificationHistory = [];
   renderNotifPanel();
 });
 
-document.getElementById('notifPermBtn').addEventListener('click', async () => {
+document.getElementById('notifPermBtn')?.addEventListener('click', async () => {
   if (!('Notification' in window)) return;
   if (Notification.permission === 'granted') return;
   const result = await Notification.requestPermission();
@@ -492,7 +500,7 @@ document.getElementById('notifPermBtn').addEventListener('click', async () => {
   }
 });
 
-document.getElementById('logoutBtn').addEventListener('click', async () => {
+document.getElementById('logoutBtn')?.addEventListener('click', async () => {
   await supabase.auth.signOut();
 });
 
@@ -530,6 +538,13 @@ function todaysTasks() {
   return state.tasks.filter(t => t.date === state.selectedDate);
 }
 
+function todayCompletionPct() {
+  if (state.selectedDate !== todayISO) return null;
+  const tasks = todaysTasks();
+  if (tasks.length === 0) return 0;
+  return Math.round(tasks.filter(t => t.done).length / tasks.length * 100);
+}
+
 function getDisplayTasks() {
   let items = state.showAllDates ? state.tasks : todaysTasks();
   if (state.searchQuery) {
@@ -554,7 +569,7 @@ function renderTasks() {
     list.innerHTML = items.map(taskItemHTML).join('');
   }
   attachTaskEvents(list);
-  updateDailyGoal();
+  renderGoals();
   updateStreakAndConfetti();
 
   const visibleIds = items.map(t => t.id);
@@ -627,6 +642,8 @@ function attachTaskEvents(root) {
       skipNextRealtime = true;
       task.done = !task.done;
       await toggleTask(id);
+      const pct = todayCompletionPct();
+      if (pct !== null) upsertTodayHistory(pct).catch(() => {});
       showToast(task.done ? `✓ "${task.title}" done!` : `↩ "${task.title}" reopened`, task.done ? 'success' : 'warning');
       renderTasks();
       renderPriority();
@@ -642,9 +659,11 @@ function attachTaskEvents(root) {
       if (!confirmed) return;
       if (!state.tasks.find(t => t.id === id)) return;
       skipNextRealtime = true;
-      const idx = state.tasks.indexOf(task);
+      const idx = state.tasks.findIndex(t => t.id === id);
       if (idx !== -1) state.tasks.splice(idx, 1);
       await deleteTask(id);
+      const pct = todayCompletionPct();
+      if (pct !== null) upsertTodayHistory(pct).catch(() => {});
       showToast(`🗑 "${task.title}" deleted`, 'warning');
       renderTasks();
       renderPriority();
@@ -874,6 +893,9 @@ document.getElementById('addTaskBtn').addEventListener('click', async () => {
       if (idx !== -1) state.tasks.splice(idx, 1, created); else state.tasks.push(created);
     }
 
+    const pct = todayCompletionPct();
+    if (pct !== null) upsertTodayHistory(pct).catch(() => {});
+
     showToast(`✓ "${title}" added`, 'success');
 
     document.getElementById('taskTitle').value = '';
@@ -913,13 +935,40 @@ function renderPriority() {
   attachTaskEvents(list);
 }
 
-/* ============ DAILY GOAL ============ */
-function updateDailyGoal() {
+/* ============ GOALS ============ */
+function renderGoals() {
+  const section = document.getElementById('goals');
   const done = todaysTasks().filter(t => t.done).length;
-  const pct = Math.min(100, Math.round((done / state.dailyGoalTarget) * 100));
-  document.getElementById('dailyGoalFill').style.width = pct + '%';
-  document.getElementById('dailyGoalCount').textContent = `${done} of ${state.dailyGoalTarget}`;
-  document.getElementById('dailyGoalPct').textContent = pct + '%';
+  const dailyPct = Math.min(100, Math.round((done / Math.max(1, state.dailyGoalTarget)) * 100));
+
+  const now = new Date();
+  const monthlyDays = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const monthlyPct = Math.min(100, Math.round((state.monthlyGoalProgress / Math.max(1, monthlyDays)) * 100));
+  const weeklyPct = Math.min(100, Math.round((state.weeklyGoalProgress / 7) * 100));
+
+  section.innerHTML = `
+    <div class="section-head"><h3><span class="tag"></span>Goals</h3></div>
+    <div class="goal-grid">
+      <div class="goal-card monthly">
+        <div class="goal-eyebrow">Monthly Goal</div>
+        <div class="goal-title">${escapeHTML(state.monthlyGoalTitle || 'Set a monthly goal')}</div>
+        <div class="goal-bar-track"><div class="goal-bar-fill" style="width:${monthlyPct}%"></div></div>
+        <div class="goal-foot"><span>${state.monthlyGoalProgress} of ${monthlyDays} days</span><span class="pct">${monthlyPct}%</span></div>
+      </div>
+      <div class="goal-card weekly">
+        <div class="goal-eyebrow">Weekly Goal</div>
+        <div class="goal-title">${escapeHTML(state.weeklyGoalTitle || 'Set a weekly goal')}</div>
+        <div class="goal-bar-track"><div class="goal-bar-fill" style="width:${weeklyPct}%"></div></div>
+        <div class="goal-foot"><span>${state.weeklyGoalProgress} of 7 days</span><span class="pct">${weeklyPct}%</span></div>
+      </div>
+      <div class="goal-card daily">
+        <div class="goal-eyebrow">Daily Goal</div>
+        <div class="goal-title">Complete ${state.dailyGoalTarget} priority tasks</div>
+        <div class="goal-bar-track"><div class="goal-bar-fill" style="width:${dailyPct}%"></div></div>
+        <div class="goal-foot"><span>${done} of ${state.dailyGoalTarget}</span><span class="pct">${dailyPct}%</span></div>
+      </div>
+    </div>
+  `;
 }
 
 /* ============ TIMELINE / SCHEDULE ============ */
@@ -1017,6 +1066,34 @@ document.getElementById('calNext').addEventListener('click', async () => {
 /* ============ PLAN TRACKER ============ */
 function renderPlans() {
   const grid = document.getElementById('planGrid');
+
+  if (state.plans.length === 0) {
+    grid.innerHTML = `
+      <div class="plan-add-card">
+        <div class="plan-add-icon">📋</div>
+        <div class="plan-add-title">No plans yet</div>
+        <div class="plan-add-sub">Add your first ongoing plan below.</div>
+        <div class="plan-add-field">
+          <input type="text" id="planAddTitle" placeholder="Plan title" maxlength="100">
+        </div>
+        <div class="plan-add-field">
+          <select id="planAddCategory">
+            <option value="Work">Work</option>
+            <option value="Personal">Personal</option>
+            <option value="Health">Health</option>
+            <option value="Learning">Learning</option>
+            <option value="Errands">Errands</option>
+          </select>
+        </div>
+        <div class="plan-add-field">
+          <input type="text" id="planAddNote" placeholder="Note (optional)" maxlength="200">
+        </div>
+        <button class="btn-primary" id="planAddBtn" style="width:100%;">+ Add Plan</button>
+      </div>`;
+    document.getElementById('planAddBtn')?.addEventListener('click', handleAddPlan);
+    return;
+  }
+
   grid.innerHTML = state.plans.map(p => {
     const color = CATEGORY_COLORS[p.category] || '#a78bfa';
     const circumference = 2 * Math.PI * 30;
@@ -1036,6 +1113,25 @@ function renderPlans() {
       </div>
     </div>`;
   }).join('');
+}
+
+async function handleAddPlan() {
+  const title = document.getElementById('planAddTitle')?.value.trim();
+  if (!title) { showToast('Please enter a plan title', 'warning'); return; }
+  const category = document.getElementById('planAddCategory')?.value || 'Work';
+  const note = document.getElementById('planAddNote')?.value.trim() || '';
+  const btn = document.getElementById('planAddBtn');
+  if (btn) btn.disabled = true;
+  try {
+    const plan = await addPlan(title, category, note);
+    state.plans.push(plan);
+    renderPlans();
+    showToast(`✓ "${title}" added`, 'success');
+  } catch {
+    showToast('Failed to add plan', 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 /* ============ REPORT ============ */
@@ -1142,7 +1238,7 @@ function renderReport() {
 /* ============ STREAK + CONFETTI ============ */
 function updateStreakAndConfetti() {
   if (!confettiFiredToday && state.selectedDate === todayISO) {
-    updateStreakIfAllDone(state.tasks, todayISO).then(result => {
+    updateStreakIfAllDone(todaysTasks(), todayISO).then(result => {
       if (result) {
         confettiFiredToday = true;
         state.streak = result.streak;

@@ -158,6 +158,9 @@ export async function updateTask(id, partial) {
     if ('date' in partial) dbPartial.task_date = partial.date;
     if ('reminder_minutes_before' in partial) dbPartial.reminder_minutes_before = partial.reminder_minutes_before;
     if ('reminder_fired_at' in partial) dbPartial.reminder_fired_at = partial.reminder_fired_at;
+    if ('recurrence' in partial) dbPartial.recurrence = partial.recurrence;
+    if ('recurrence_parent_id' in partial) dbPartial.recurrence_parent_id = partial.recurrence_parent_id;
+    if ('is_template' in partial) dbPartial.is_template = partial.is_template;
     const { data, error } = await supabase
       .from('tasks')
       .update(dbPartial)
@@ -187,6 +190,24 @@ export async function getPlans() {
     return data || [];
   } catch (err) {
     console.error('store.getPlans:', err);
+    throw err;
+  }
+}
+
+/** Insert a new plan. Returns the created plan with its server-generated id. */
+export async function addPlan(title, category, note = '') {
+  if (!isOnline()) { offlineQueueWrite('addPlan', { title, category, note }); return { id: 'offline-' + Date.now(), title, category, note, progress: 0 }; }
+  try {
+    const userId = await getUserId();
+    const { data, error } = await supabase
+      .from('plans')
+      .insert({ user_id: userId, title, category, note, progress: 0 })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    console.error('store.addPlan:', err);
     throw err;
   }
 }
@@ -235,7 +256,7 @@ export async function getHistory(days = 7) {
       .from('daily_history')
       .select('*')
       .eq('user_id', userId)
-      .order('entry_date', { ascending: true })
+      .order('entry_date', { ascending: false })
       .limit(days);
     if (error) throw error;
     return data || [];

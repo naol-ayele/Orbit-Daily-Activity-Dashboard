@@ -102,6 +102,7 @@
   .heatmap-grid{ display:flex; gap:2px; overflow-x:auto; padding-bottom:4px; }
   .heatmap-col{ display:flex; flex-direction:column; gap:2px; }
   .heat-cell{ width:10px; height:10px; border-radius:2px; background:var(--panel-2); flex-shrink:0; position:relative; cursor:default; }
+  .heat-cell.l0{ background:var(--panel-2); }
   .heat-cell.l1{ background:rgba(167,139,250,0.2); }
   .heat-cell.l2{ background:rgba(167,139,250,0.4); }
   .heat-cell.l3{ background:rgba(167,139,250,0.65); }
@@ -300,6 +301,14 @@
   .plan-title{ font-size: 15px; font-weight:600; margin-bottom: 14px; }
   .ring-wrap{ display:flex; align-items:center; gap: 14px; }
   .plan-note{ font-size:12px; color: var(--text-dim); line-height:1.5; }
+  .plan-add-card{
+    background: var(--panel); border:1px dashed var(--line); border-radius: var(--radius);
+    padding: 28px; text-align:center; display:flex; flex-direction:column; gap:10px;
+  }
+  .plan-add-icon{ font-size:28px; }
+  .plan-add-title{ font-size:15px; font-weight:600; }
+  .plan-add-sub{ font-size:12.5px; color:var(--text-dim); margin-bottom:4px; }
+  .plan-add-field input, .plan-add-field select{ text-align:center; }
 
   /* ---------- report ---------- */
   .report-grid{ display:grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom:16px; }
@@ -369,20 +378,33 @@
 
 <style>
   .login-screen{
-    position:fixed; inset:0; z-index: 1500; display:flex; align-items:center; justify-content:center;
+    position:fixed; inset:0; z-index:1500; display:flex; align-items:center; justify-content:center;
     background:
-      radial-gradient(circle at 12% 8%, rgba(167,92,255,0.12), transparent 45%),
-      radial-gradient(circle at 90% 0%, rgba(92,200,255,0.12), transparent 40%),
+      radial-gradient(circle at 12% 8%, rgba(167,92,255,0.15), transparent 45%),
+      radial-gradient(circle at 90% 0%, rgba(92,200,255,0.15), transparent 40%),
       var(--bg);
   }
   .login-card{
     width: 340px; background: var(--panel); border:1px solid var(--line); border-radius: var(--radius);
-    padding: 30px 26px; box-shadow: var(--shadow);
+    padding: 32px 28px; box-shadow: var(--shadow);
   }
-  .login-card input{ display:block; }
-  .auth-error{ color: var(--coral); font-size:12px; margin-top:10px; min-height:14px; text-align:center; }
-  .auth-toggle{ text-align:center; margin-top:16px; font-size:12.5px; color: var(--text-dim); }
-  .auth-toggle button{ background:none; border:none; color: var(--violet); font-weight:600; margin-left:4px; }
+  .login-card .brand{ justify-content:center; margin-bottom:24px; }
+  .login-card h2{ font-size:17px; text-align:center; margin-bottom:20px; }
+  .login-card form{ display:flex; flex-direction:column; gap:10px; }
+  .login-card input[type=email],
+  .login-card input[type=password]{
+    display:block; width:100%; background:var(--panel-2); border:1px solid var(--line);
+    color:var(--text); border-radius:10px; padding:11px 14px; font-size:14px;
+    font-family:'IBM Plex Sans',sans-serif; outline:none; transition:border-color .15s;
+  }
+  .login-card input::placeholder{ color:var(--text-faint); }
+  .login-card input:focus{ border-color:var(--violet); }
+  .login-card .btn-primary{ width:100%; }
+  .login-card .btn-primary:disabled{ opacity:0.55; cursor:not-allowed; transform:none; box-shadow:none; }
+  .auth-error{ color:var(--coral); font-size:12.5px; margin-top:4px; min-height:16px; text-align:center; }
+  .auth-toggle{ text-align:center; margin-top:20px; font-size:12.5px; color:var(--text-dim); }
+  .auth-toggle button{ background:none; border:none; color:var(--violet); font-weight:600; margin-left:4px; cursor:pointer; transition:color .15s; }
+  .auth-toggle button:hover{ color:var(--sky); }
   .app-hidden{ display:none !important; }
   .logout-btn{
     background: var(--panel); border:1px solid var(--line); color: var(--text-dim);
@@ -456,20 +478,22 @@
 </style>
 </head>
 
+<body>
+
 <div id="loginScreen" class="login-screen">
   <div class="login-card">
-    <div class="brand" style="justify-content:center; margin-bottom:22px;">
+    <div class="brand">
       <div class="dot"></div>
-      <div style="text-align:left;">
+      <div>
         <h1>Orbit</h1>
         <span>DAILY OS</span>
       </div>
     </div>
-    <h2 id="authTitle" style="font-size:17px; text-align:center; margin-bottom:18px;">Log in</h2>
+    <h2 id="authTitle">Log in</h2>
     <form id="authForm">
-      <input type="email" id="authEmail" placeholder="Email" required style="margin-bottom:10px;">
-      <input type="password" id="authPassword" placeholder="Password" required style="margin-bottom:14px;">
-      <button type="submit" class="btn-primary" style="width:100%;" id="authSubmitBtn">Log In</button>
+      <input type="email" id="authEmail" placeholder="Email" required>
+      <input type="password" id="authPassword" placeholder="Password" required>
+      <button type="submit" class="btn-primary" id="authSubmitBtn">Log In</button>
     </form>
     <div id="authError" class="auth-error"></div>
     <div class="auth-toggle">
@@ -478,7 +502,6 @@
     </div>
   </div>
 </div>
-<body>
 
 <canvas id="confetti-canvas"></canvas>
 
@@ -541,30 +564,8 @@
       </div>
     </div>
 
-    <!-- GOALS -->
-    <section id="goals">
-      <div class="section-head"><h3><span class="tag"></span>Goals</h3></div>
-      <div class="goal-grid">
-        <div class="goal-card monthly">
-          <div class="goal-eyebrow">Monthly Goal</div>
-          <div class="goal-title">Ship the redesign & write 8 articles</div>
-          <div class="goal-bar-track"><div class="goal-bar-fill" style="width:62%"></div></div>
-          <div class="goal-foot"><span>18 of 29 days</span><span class="pct">62%</span></div>
-        </div>
-        <div class="goal-card weekly">
-          <div class="goal-eyebrow">Weekly Goal</div>
-          <div class="goal-title">Finish onboarding flow + 3 workouts</div>
-          <div class="goal-bar-track"><div class="goal-bar-fill" style="width:45%"></div></div>
-          <div class="goal-foot"><span>3 of 7 days</span><span class="pct">45%</span></div>
-        </div>
-        <div class="goal-card daily">
-          <div class="goal-eyebrow">Daily Goal</div>
-          <div class="goal-title" id="dailyGoalTitle">Complete 5 priority tasks</div>
-          <div class="goal-bar-track"><div class="goal-bar-fill" id="dailyGoalFill" style="width:0%"></div></div>
-          <div class="goal-foot"><span id="dailyGoalCount">0 of 5</span><span class="pct" id="dailyGoalPct">0%</span></div>
-        </div>
-      </div>
-    </section>
+    <!-- GOALS (rendered by renderGoals()) -->
+    <section id="goals"></section>
 
     <div class="grid-2">
       <!-- SCHEDULE -->

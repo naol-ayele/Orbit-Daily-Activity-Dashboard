@@ -6,7 +6,10 @@ const URLS = [
   '/js/app.js',
   '/js/store.js',
   '/js/supabase-client.js',
-  '/js/config.js'
+  '/js/config.js',
+  '/icon-192.svg',
+  '/icon-512.svg',
+  'https://esm.sh/@supabase/supabase-js@2'
 ];
 
 self.addEventListener('install', e => {

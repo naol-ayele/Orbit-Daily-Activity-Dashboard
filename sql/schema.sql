@@ -32,7 +32,12 @@ create table tasks (
   task_date date not null,
   done boolean default false,
   created_at timestamptz default now(),
-  updated_at timestamptz default now()
+  updated_at timestamptz default now(),
+  reminder_minutes_before integer,
+  reminder_fired_at timestamptz,
+  recurrence text,
+  is_template boolean default false,
+  recurrence_parent_id uuid references tasks(id) on delete cascade
 );
 
 create table plans (
@@ -77,6 +82,11 @@ $$ language plpgsql security definer;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+-- Indexes for common query patterns
+create index idx_tasks_user_date on tasks(user_id, task_date);
+create index idx_tasks_user_template on tasks(user_id, is_template);
+create index idx_daily_history_user_date on daily_history(user_id, entry_date);
 
 -- Enable Realtime on the tasks table (Module 6).
 -- Run this after the schema is applied, or toggle via the Supabase dashboard:
