@@ -374,6 +374,31 @@
     .goal-grid, .grid-2, .plan-grid, .report-grid{ grid-template-columns: 1fr; }
     .task-meta-row{ grid-template-columns: 1fr 1fr; }
   }
+
+  @media (max-width: 600px){
+    main{ padding:20px 16px 70px; }
+    .login-card{ width:94%; max-width:340px; }
+    .task-meta-row{ grid-template-columns:1fr; }
+    .task-input-row{ grid-template-columns:1fr; }
+    #schedule{ height:280px; }
+    .topbar h2{ font-size:21px; }
+    .topbar .sub{ font-size:12px; }
+    .section-head h3{ font-size:13.5px; }
+    .task-item{ padding:11px 12px; gap:10px; }
+    .cal-day{ font-size:11px; }
+    .cal-grid{ gap:2px; }
+    .today-pill{ font-size:11px; padding:6px 12px; }
+    .sidebar{ padding:12px; gap:14px; }
+    .brand h1{ font-size:16px; }
+    nav.navlinks a{ font-size:12px; padding:7px 10px; }
+    .streak-num{ font-size:22px; }
+    #toastContainer{ right:10px; top:12px; }
+    .toast{ max-width:90vw; }
+    .notif-panel{ right:10px; width:calc(100vw - 20px); }
+    .confirm-box{ padding:24px 20px; }
+    .confirm-actions{ flex-direction:column; }
+    .confirm-actions button{ width:100%; }
+  }
 </style>
 
 <style>
